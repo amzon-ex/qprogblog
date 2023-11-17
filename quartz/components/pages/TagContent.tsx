@@ -1,11 +1,11 @@
 import { QuartzComponentConstructor, QuartzComponentProps } from "../types"
-import { Fragment, jsx, jsxs } from "preact/jsx-runtime"
-import { toJsxRuntime } from "hast-util-to-jsx-runtime"
 import style from "../styles/listPage.scss"
 import { PageList } from "../PageList"
 import { FullSlug, getAllSegmentPrefixes, simplifySlug } from "../../util/path"
 import { QuartzPluginData } from "../../plugins/vfile"
 import { Root } from "hast"
+import { pluralize } from "../../util/lang"
+import { htmlToJsx } from "../../util/jsx"
 
 const numPages = 10
 function TagContent(props: QuartzComponentProps) {
@@ -22,10 +22,10 @@ function TagContent(props: QuartzComponentProps) {
       (file.frontmatter?.tags ?? []).flatMap(getAllSegmentPrefixes).includes(tag),
     )
 
-  const content = (tree as Root).children.length === 0 ?
-    fileData.description :
-    // @ts-ignore
-    toJsxRuntime(tree, { Fragment, jsx, jsxs, elementAttributeNameCase: "html" })
+  const content =
+    (tree as Root).children.length === 0
+      ? fileData.description
+      : htmlToJsx(fileData.filePath!, tree)
 
   if (tag === "") {
     const tags = [...new Set(allFiles.flatMap((data) => data.frontmatter?.tags ?? []))]
@@ -36,7 +36,9 @@ function TagContent(props: QuartzComponentProps) {
 
     return (
       <div class="popover-hint">
-        <article>{content}</article>
+        <article>
+          <p>{content}</p>
+        </article>
         <p>Found {tags.length} total tags.</p>
         <div>
           {tags.map((tag) => {
@@ -45,15 +47,19 @@ function TagContent(props: QuartzComponentProps) {
               ...props,
               allFiles: pages,
             }
+
+            const contentPage = allFiles.filter((file) => file.slug === `tags/${tag}`)[0]
+            const content = contentPage?.description
             return (
               <div>
                 <h2>
-                  <a class="internal tag-link" href={`./${tag}`}>
+                  <a class="internal tag-link" href={`../tags/${tag}`}>
                     #{tag}
                   </a>
                 </h2>
+                {content && <p>{content}</p>}
                 <p>
-                  {pages.length} items with this tag.{" "}
+                  {pluralize(pages.length, "item")} with this tag.{" "}
                   {pages.length > numPages && `Showing first ${numPages}.`}
                 </p>
                 <PageList limit={numPages} {...listProps} />
@@ -73,7 +79,7 @@ function TagContent(props: QuartzComponentProps) {
     return (
       <div class="popover-hint">
         <article>{content}</article>
-        <p>{pages.length} items with this tag.</p>
+        <p>{pluralize(pages.length, "item")} with this tag.</p>
         <div>
           <PageList {...listProps} />
         </div>

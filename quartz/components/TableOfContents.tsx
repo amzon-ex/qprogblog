@@ -13,14 +13,14 @@ const defaultOptions: Options = {
   layout: "modern",
 }
 
-function TableOfContents({ fileData }: QuartzComponentProps) {
+function TableOfContents({ fileData, displayClass }: QuartzComponentProps) {
   if (!fileData.toc) {
     return null
   }
 
   return (
-    <div class="desktop-only">
-      <button type="button" id="toc">
+    <div class={`toc ${displayClass ?? ""}`}>
+      <button type="button" id="toc" class={fileData.collapseToc ? "collapsed" : ""}>
         <h3>Table of Contents</h3>
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -60,7 +60,7 @@ function LegacyTableOfContents({ fileData }: QuartzComponentProps) {
   }
 
   return (
-    <details id="toc" open>
+    <details id="toc" open={!fileData.collapseToc}>
       <summary>
         <h3>Table of Contents</h3>
       </summary>

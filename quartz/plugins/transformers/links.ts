@@ -5,7 +5,6 @@ import {
   SimpleSlug,
   TransformOptions,
   _stripSlashes,
-  joinSegments,
   simplifySlug,
   splitAnchor,
   transformLink,
@@ -19,11 +18,13 @@ interface Options {
   markdownLinkResolution: TransformOptions["strategy"]
   /** Strips folders from a link so that it looks nice */
   prettyLinks: boolean
+  openLinksInNewTab: boolean
 }
 
 const defaultOptions: Options = {
   markdownLinkResolution: "absolute",
   prettyLinks: true,
+  openLinksInNewTab: false,
 }
 
 export const CrawlLinks: QuartzTransformerPlugin<Partial<Options> | undefined> = (userOpts) => {
@@ -53,23 +54,37 @@ export const CrawlLinks: QuartzTransformerPlugin<Partial<Options> | undefined> =
                 node.properties.className ??= []
                 node.properties.className.push(isAbsoluteUrl(dest) ? "external" : "internal")
 
+                if (opts.openLinksInNewTab) {
+                  node.properties.target = "_blank"
+                }
+
                 // don't process external links or intra-document anchors
-                if (!(isAbsoluteUrl(dest) || dest.startsWith("#"))) {
+                const isInternal = !(isAbsoluteUrl(dest) || dest.startsWith("#"))
+                if (isInternal) {
                   dest = node.properties.href = transformLink(
                     file.data.slug!,
                     dest,
                     transformOptions,
                   )
+
+                  // url.resolve is considered legacy
+                  // WHATWG equivalent https://nodejs.dev/en/api/v18/url/#urlresolvefrom-to
                   const url = new URL(dest, `https://base.com/${curSlug}`)
                   const canonicalDest = url.pathname
                   const [destCanonical, _destAnchor] = splitAnchor(canonicalDest)
-                  const simple = simplifySlug(destCanonical as FullSlug)
+
+                  // need to decodeURIComponent here as WHATWG URL percent-encodes everything
+                  const simple = decodeURIComponent(
+                    simplifySlug(destCanonical as FullSlug),
+                  ) as SimpleSlug
                   outgoing.add(simple)
+                  node.properties["data-slug"] = simple
                 }
 
                 // rewrite link internals if prettylinks is on
                 if (
                   opts.prettyLinks &&
+                  isInternal &&
                   node.children.length === 1 &&
                   node.children[0].type === "text" &&
                   !node.children[0].value.startsWith("#")

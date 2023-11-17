@@ -1,5 +1,6 @@
 import micromorph from "micromorph"
 import { FullSlug, RelativeURL, getFullSlug } from "../../util/path"
+import { normalizeRelativeURLs } from "./popover.inline"
 
 // adapted from `micromorph`
 // https://github.com/natemoo-re/micromorph
@@ -12,17 +13,21 @@ const isLocalUrl = (href: string) => {
   try {
     const url = new URL(href)
     if (window.location.origin === url.origin) {
-      if (url.pathname === window.location.pathname) {
-        return !url.hash
-      }
       return true
     }
   } catch (e) {}
   return false
 }
 
+const isSamePage = (url: URL): boolean => {
+  const sameOrigin = url.origin === window.location.origin
+  const samePath = url.pathname === window.location.pathname
+  return sameOrigin && samePath
+}
+
 const getOpts = ({ target }: Event): { url: URL; scroll?: boolean } | undefined => {
   if (!isElement(target)) return
+  if (target.attributes.getNamedItem("target")?.value === "_blank") return
   const a = target.closest("a")
   if (!a) return
   if ("routerIgnore" in a.dataset) return
@@ -48,6 +53,8 @@ async function navigate(url: URL, isBack: boolean = false) {
   if (!contents) return
 
   const html = p.parseFromString(contents, "text/html")
+  normalizeRelativeURLs(html, url)
+
   let title = html.querySelector("title")?.textContent
   if (title) {
     document.title = title
@@ -67,7 +74,7 @@ async function navigate(url: URL, isBack: boolean = false) {
   // scroll into place and add history
   if (!isBack) {
     if (url.hash) {
-      const el = document.getElementById(url.hash.substring(1))
+      const el = document.getElementById(decodeURIComponent(url.hash.substring(1)))
       el?.scrollIntoView()
     } else {
       window.scrollTo({ top: 0 })
@@ -82,7 +89,9 @@ async function navigate(url: URL, isBack: boolean = false) {
 
   // delay setting the url until now
   // at this point everything is loaded so changing the url should resolve to the correct addresses
-  history.pushState({}, "", url)
+  if (!isBack) {
+    history.pushState({}, "", url)
+  }
   notifyNav(getFullSlug(window))
   delete announcer.dataset.persist
 }
@@ -93,8 +102,17 @@ function createRouter() {
   if (typeof window !== "undefined") {
     window.addEventListener("click", async (event) => {
       const { url } = getOpts(event) ?? {}
-      if (!url) return
+      // dont hijack behaviour, just let browser act normally
+      if (!url || event.ctrlKey || event.metaKey) return
       event.preventDefault()
+
+      if (isSamePage(url) && url.hash) {
+        const el = document.getElementById(decodeURIComponent(url.hash.substring(1)))
+        el?.scrollIntoView()
+        history.pushState({}, "", url)
+        return
+      }
+
       try {
         navigate(url, false)
       } catch (e) {
@@ -140,6 +158,7 @@ if (!customElements.get("route-announcer")) {
     style:
       "position: absolute; left: 0; top: 0; clip: rect(0 0 0 0); clip-path: inset(50%); overflow: hidden; white-space: nowrap; width: 1px; height: 1px",
   }
+
   customElements.define(
     "route-announcer",
     class RouteAnnouncer extends HTMLElement {

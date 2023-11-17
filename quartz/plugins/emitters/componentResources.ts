@@ -7,7 +7,7 @@ import spaRouterScript from "../../components/scripts/spa.inline"
 import plausibleScript from "../../components/scripts/plausible.inline"
 // @ts-ignore
 import popoverScript from "../../components/scripts/popover.inline"
-import styles from "../../styles/base.scss"
+import styles from "../../styles/custom.scss"
 import popoverStyle from "../../components/styles/popover.scss"
 import { BuildCtx } from "../../util/ctx"
 import { StaticResources } from "../../util/resources"
@@ -96,6 +96,15 @@ function addGlobalPageResources(
       });`)
   } else if (cfg.analytics?.provider === "plausible") {
     componentResources.afterDOMLoaded.push(plausibleScript)
+  } else if (cfg.analytics?.provider === "umami") {
+    componentResources.afterDOMLoaded.push(`
+      const umamiScript = document.createElement("script")
+      umamiScript.src = "https://analytics.umami.is/script.js"
+      umamiScript.setAttribute("data-website-id", "${cfg.analytics.websiteId}")
+      umamiScript.async = true
+  
+      document.head.appendChild(umamiScript)
+    `)
   }
 
   if (cfg.enableSPA) {
@@ -103,8 +112,14 @@ function addGlobalPageResources(
   } else {
     componentResources.afterDOMLoaded.push(`
         window.spaNavigate = (url, _) => window.location.assign(url)
-        const event = new CustomEvent("nav", { detail: { slug: document.body.dataset.slug } })
+        const event = new CustomEvent("nav", { detail: { url: document.body.dataset.slug } })
         document.dispatchEvent(event)`)
+  }
+
+  let wsUrl = `ws://localhost:${ctx.argv.wsPort}`
+
+  if (ctx.argv.remoteDevHost) {
+    wsUrl = `wss://${ctx.argv.remoteDevHost}:${ctx.argv.wsPort}`
   }
 
   if (reloadScript) {
@@ -112,7 +127,7 @@ function addGlobalPageResources(
       loadTime: "afterDOMReady",
       contentType: "inline",
       script: `
-          const socket = new WebSocket('ws://localhost:3001')
+          const socket = new WebSocket('${wsUrl}')
           socket.addEventListener('message', () => document.location.reload())
         `,
     })
@@ -149,7 +164,7 @@ export const ComponentResources: QuartzEmitterPlugin<Options> = (opts?: Partial<
 
       addGlobalPageResources(ctx, resources, componentResources)
 
-      const stylesheet = joinStyles(ctx.cfg.configuration.theme, styles, ...componentResources.css)
+      const stylesheet = joinStyles(ctx.cfg.configuration.theme, ...componentResources.css, styles)
       const prescript = joinScripts(componentResources.beforeDOMLoaded)
       const postscript = joinScripts(componentResources.afterDOMLoaded)
       const fps = await Promise.all([
