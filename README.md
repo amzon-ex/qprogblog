@@ -1,4 +1,4 @@
-# ProgBlog
+# qProgBlog
 
 A tech blog documenting workflows, actions and solutions. 
 
